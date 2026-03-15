@@ -5,6 +5,7 @@ import { extractReceiptData } from "./extract-receipt";
 import { ReceiptResult, ExtractorOptions } from "./types";
 
 export { ReceiptResult, ExtractorOptions, AuthenticityResult, ExtractionResult, ReceiptItem, AuthenticityClassification } from "./types";
+export { ReceiptExtractorError } from "./errors";
 
 export async function extractReceipt(
   imageBuffer: Buffer,

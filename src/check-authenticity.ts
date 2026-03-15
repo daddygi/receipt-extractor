@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeImage } from "./claude-client";
+import { ReceiptExtractorError } from "./errors";
 import { AuthenticityResult } from "./types";
 
 const PROMPT = `Analyze this image and determine if it is a real photograph of a physical receipt, an AI-generated image, or a forged/edited image.
@@ -24,11 +25,19 @@ export async function checkAuthenticity(
   const response = await analyzeImage(client, imageBuffer, mimeType, PROMPT);
 
   const json = response.replace(/```json\n?|```\n?/g, "").trim();
-  const parsed = JSON.parse(json);
 
-  return {
-    classification: parsed.classification,
-    confidence: parsed.confidence,
-    reasoning: parsed.reasoning,
-  };
+  try {
+    const parsed = JSON.parse(json);
+
+    return {
+      classification: parsed.classification,
+      confidence: parsed.confidence,
+      reasoning: parsed.reasoning,
+    };
+  } catch {
+    throw new ReceiptExtractorError(
+      "Failed to parse authenticity response",
+      "PARSE_ERROR"
+    );
+  }
 }

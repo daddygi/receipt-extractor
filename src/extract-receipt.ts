@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeImage } from "./claude-client";
+import { ReceiptExtractorError } from "./errors";
 import { ExtractionResult } from "./types";
 
 const PROMPT = `Analyze this image. First determine if it is a receipt. If it is not a receipt, respond with:
@@ -30,13 +31,21 @@ export async function extractReceiptData(
   const response = await analyzeImage(client, imageBuffer, mimeType, PROMPT);
 
   const json = response.replace(/```json\n?|```\n?/g, "").trim();
-  const parsed = JSON.parse(json);
 
-  return {
-    isReceipt: parsed.isReceipt,
-    vendor: parsed.vendor,
-    items: parsed.items,
-    total: parsed.total,
-    currency: parsed.currency,
-  };
+  try {
+    const parsed = JSON.parse(json);
+
+    return {
+      isReceipt: parsed.isReceipt,
+      vendor: parsed.vendor,
+      items: parsed.items,
+      total: parsed.total,
+      currency: parsed.currency,
+    };
+  } catch {
+    throw new ReceiptExtractorError(
+      "Failed to parse extraction response",
+      "PARSE_ERROR"
+    );
+  }
 }
