@@ -8,3 +8,6 @@ dist/
 # Planning docs - local only
 docs/plan.md
 docs/thoughts.md
+
+# Test images
+test-images/

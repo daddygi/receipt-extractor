@@ -21,13 +21,13 @@ export async function extractReceipt(
   const client = createClient(options.apiKey);
   const mimeType = validation.mimeType!;
 
-  const authenticity = await checkAuthenticity(client, imageBuffer, mimeType);
+  const authenticity = await checkAuthenticity(client, imageBuffer, mimeType, options.authenticityModel);
 
   if (authenticity.classification !== "real") {
     return { authenticity, extraction: null };
   }
 
-  const extraction = await extractReceiptData(client, imageBuffer, mimeType);
+  const extraction = await extractReceiptData(client, imageBuffer, mimeType, options.extractionModel);
 
   if (!extraction.isReceipt) {
     return { authenticity, extraction: null };

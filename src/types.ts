@@ -26,4 +26,6 @@ export interface ReceiptResult {
 
 export interface ExtractorOptions {
   apiKey?: string;
+  authenticityModel?: string;
+  extractionModel?: string;
 }
