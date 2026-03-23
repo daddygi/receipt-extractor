@@ -29,6 +29,7 @@ describe("extractReceipt", () => {
       classification: "ai_generated",
       confidence: 0.9,
       reasoning: "AI artifacts detected",
+      metadata: { hasExif: false, flags: [], hasGps: false },
     });
 
     const result = await extractReceipt(JPEG_HEADER, { apiKey: "test-key" });
@@ -43,6 +44,7 @@ describe("extractReceipt", () => {
       classification: "real",
       confidence: 0.95,
       reasoning: "Looks real",
+      metadata: { hasExif: true, flags: [], hasGps: false },
     });
     vi.mocked(extractReceiptData).mockResolvedValue({
       isReceipt: false,
@@ -63,6 +65,7 @@ describe("extractReceipt", () => {
       classification: "real",
       confidence: 0.97,
       reasoning: "Natural photo",
+      metadata: { hasExif: true, flags: [], hasGps: true },
     });
     vi.mocked(extractReceiptData).mockResolvedValue({
       isReceipt: true,

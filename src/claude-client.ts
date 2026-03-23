@@ -14,16 +14,19 @@ export function createClient(apiKey?: string): Anthropic {
   return new Anthropic({ apiKey: key });
 }
 
+const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+
 export async function analyzeImage(
   client: Anthropic,
   imageBuffer: Buffer,
   mimeType: string,
-  prompt: string
+  prompt: string,
+  model?: string
 ): Promise<string> {
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
+      model: model || DEFAULT_MODEL,
+      max_tokens: 2048,
       messages: [
         {
           role: "user",

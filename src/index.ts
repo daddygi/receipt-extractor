@@ -5,7 +5,7 @@ import { extractReceiptData } from "./extract-receipt";
 import { ReceiptExtractorError } from "./errors";
 import { ReceiptResult, ExtractorOptions } from "./types";
 
-export { ReceiptResult, ExtractorOptions, AuthenticityResult, ExtractionResult, ReceiptItem, AuthenticityClassification } from "./types";
+export { ReceiptResult, ExtractorOptions, AuthenticityResult, ExtractionResult, ReceiptItem, AuthenticityClassification, MetadataAnalysis, MetadataFlag } from "./types";
 export { ReceiptExtractorError } from "./errors";
 
 export async function extractReceipt(
@@ -21,13 +21,13 @@ export async function extractReceipt(
   const client = createClient(options.apiKey);
   const mimeType = validation.mimeType!;
 
-  const authenticity = await checkAuthenticity(client, imageBuffer, mimeType);
+  const authenticity = await checkAuthenticity(client, imageBuffer, mimeType, options.authenticityModel);
 
   if (authenticity.classification !== "real") {
     return { authenticity, extraction: null };
   }
 
-  const extraction = await extractReceiptData(client, imageBuffer, mimeType);
+  const extraction = await extractReceiptData(client, imageBuffer, mimeType, options.extractionModel);
 
   if (!extraction.isReceipt) {
     return { authenticity, extraction: null };
