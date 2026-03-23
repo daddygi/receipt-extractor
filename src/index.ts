@@ -5,7 +5,7 @@ import { extractReceiptData } from "./extract-receipt";
 import { ReceiptExtractorError } from "./errors";
 import { ReceiptResult, ExtractorOptions } from "./types";
 
-export { ReceiptResult, ExtractorOptions, AuthenticityResult, ExtractionResult, ReceiptItem, AuthenticityClassification } from "./types";
+export { ReceiptResult, ExtractorOptions, AuthenticityResult, ExtractionResult, ReceiptItem, AuthenticityClassification, MetadataAnalysis, MetadataFlag } from "./types";
 export { ReceiptExtractorError } from "./errors";
 
 export async function extractReceipt(
