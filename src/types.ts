@@ -34,6 +34,8 @@ export interface ExtractionResult {
   items: ReceiptItem[];
   total: number;
   currency: string;
+  receiptNumber: string | null;
+  purchaseDate: string | null;
 }
 
 export interface ReceiptResult {

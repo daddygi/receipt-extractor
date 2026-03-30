@@ -4,15 +4,34 @@ import { extractJson } from "./parse-json";
 import { analyzeMetadata, formatMetadataForPrompt } from "./analyze-metadata";
 import { AuthenticityResult } from "./types";
 
-const BASE_PROMPT = `You are a forensic image analyst. Your task is to determine if this receipt image is authentic.
+function buildPrompt(): string {
+  const today = new Date().toISOString().split("T")[0];
 
-STEP 1: First, read and transcribe ALL text visible on the receipt, line by line. Include every word, number, and symbol.
+  return `You are a forensic image analyst specializing in detecting AI-generated receipt images. Your task is to determine if this receipt image is authentic.
 
-STEP 2: Analyze the transcribed text for red flags:
-- Any mention of "generated", "sample", "test", "fake", "demo", or AI tool names
-- Receipt IDs or transaction numbers that look fabricated
-- Nonsensical or placeholder text
-- Content that seems templated or generic
+IMPORTANT CONTEXT: Today's date is ${today}. Dates in 2026 and recent months are completely normal and expected. Do NOT flag a receipt as fake simply because of a 2026 date — that is the current year.
+
+STEP 1: First, read and transcribe ALL text visible on the receipt, line by line. Include every word, number, and symbol. Pay very close attention to the EXACT spelling of every word.
+
+STEP 2 (MOST IMPORTANT — this step catches most fakes): Analyze the transcribed text character by character for garbled, misspelled, or nonsensical text.
+
+AI image generators (DALL-E, Midjourney, Stable Diffusion, Flux) are notoriously bad at generating readable text. They produce images that LOOK like real receipts at a glance but the actual text is garbled nonsense. This is the #1 way to detect AI-generated receipts. Look for:
+
+- Item names that look like real words but are misspelled or garbled. Examples of AI-generated gibberish: "Spiltgatay" (not a real word), "Suoghotti" (trying to be "Spaghetti"), "Burdety Erreos" (trying to be "Burger"), "Ptash Pteaeno" (not real words), "Gatorea SoftIce" (garbled), "Notang TannaMilattbg" (nonsense). These are NOT OCR errors — they are AI artifacts.
+- Product names that don't match real products sold at the claimed store
+- Store names with subtle misspellings (e.g. "Departmenots" instead of "Departments")
+- Address text that is garbled or doesn't form real addresses
+- ANY text on the receipt that doesn't form coherent, real words
+
+CRITICAL: You MUST distinguish between these two very different things:
+
+A) POS SYSTEM CODES (LEGITIMATE — NOT fake): Real receipt printers use short product codes and abbreviations that may look cryptic but are intentional. Examples: "SCSTSE GRANDE" (Starbucks product code), "CHKN MCNGT" (Chicken McNuggets), "BRG W/CHS" (Burger with Cheese), "VEG WRAP SM" (Vegetable Wrap Small), "GRN TEA LRG" (Green Tea Large). These are short (usually under 10 characters per word), all-caps, and appear alongside recognizable words like sizes (GRANDE, TALL, SM, LRG) or categories. These are REAL and must NOT be flagged.
+
+B) AI-GENERATED GARBLED TEXT (FAKE): AI image generators produce text that attempts to be full English words but contains wrong letters throughout. The words are typically LONGER than abbreviations and look like they're TRYING to spell something but fail. Examples: "Spiltgatay" (trying to be a food word but isn't), "Suoghotti" (trying to be "Spaghetti"), "Burdety Erreos" (trying to be "Burger"), "Ptash Pteaeno" (total nonsense), "Notang TannaMilattbg" (long garbled string), "Gerbottisoe Duchend" (gibberish). Notice how these are LONGER words that look like failed attempts at real English — not short intentional codes.
+
+The test: If an item name looks like it's trying to be a full English word but is misspelled with multiple wrong characters, that is AI generation. If it's a short, crisp code/abbreviation alongside recognizable words, that is a real POS system.
+
+CRITICAL: Even if the IMAGE looks photorealistic with perfect paper texture, lighting, and thermal printer artifacts — if the TEXT contains garbled fake words (type B above), it is AI-generated. AI tools can generate realistic-looking images but CANNOT generate correct text consistently.
 
 STEP 3: Analyze the image visually:
 - Is the text too clean/perfect for a thermal printer? Real thermal printers produce fading, uneven ink, slight misalignment
@@ -21,23 +40,24 @@ STEP 3: Analyze the image visually:
 - Does the background look staged or rendered?
 - Are there editing artifacts? (mismatched fonts, cut/paste edges, inconsistent shadows)
 
-STEP 4: Review the metadata analysis provided below. Metadata is CRITICAL forensic evidence — treat it with high weight:
-- Missing EXIF data is a STRONG indicator of AI generation or digital fabrication. Real phone cameras (iPhone, Samsung, Pixel, etc.) ALWAYS embed EXIF metadata including camera make/model, date/time, and often GPS. The ONLY legitimate reasons for missing EXIF are: the image was shared through a platform that strips metadata (messaging apps, social media). However, for a receipt photo submitted directly, missing EXIF is highly suspicious.
-- AI generation tools (DALL-E, Midjourney, Stable Diffusion) in the software field confirm AI origin.
-- Editing software (Photoshop, GIMP) suggests the image was manipulated.
-- Camera make/model and GPS data are STRONG positive signals — very difficult to fake.
-- XMP edit history indicates post-capture modifications.
+STEP 4: Review the metadata analysis provided below:
+- Missing camera make/model is common and NOT automatically suspicious (messaging apps strip this).
+- Completely missing EXIF data (no fields at all) is more suspicious than partial EXIF.
+- AI generation tools in the software field confirm AI origin.
+- Editing software (Photoshop, GIMP) suggests manipulation.
+- Camera make/model and GPS data are positive signals when present.
 
-STEP 5: Based on ALL evidence from steps 2, 3, and 4, classify as:
-- "real": genuine photograph of a real physical receipt
-- "ai_generated": image created by AI or digitally generated
+STEP 5: Based on ALL evidence, classify as:
+- "real": genuine photograph of a real physical receipt with legible, coherent text
+- "ai_generated": image created by AI (the biggest giveaway is garbled/nonsensical text)
 - "forged": real receipt photo that has been digitally edited/manipulated
 
 CLASSIFICATION RULES (in priority order):
-1. If ANY text red flags are found in step 2 (like the word "generated" appearing anywhere on the receipt), classify as "ai_generated" regardless of how realistic the image looks visually.
-2. If metadata reveals AI generation software, classify as "ai_generated".
-3. If metadata reveals editing software or edit history, weigh this heavily toward "forged".
-4. If EXIF metadata is completely missing AND there are no camera details, you MUST lower your confidence significantly (max 0.6 for "real") and be much more skeptical of visual appearance — modern AI can produce photorealistic receipt images. When in doubt with missing metadata, lean toward "ai_generated".
+1. If item names, store names, or other text on the receipt contains garbled/nonsensical words that are NOT real words or standard abbreviations, classify as "ai_generated" IMMEDIATELY — regardless of how realistic the image looks. This is the strongest possible signal.
+2. If ANY other text red flags are found (like "generated", "sample", "test", "fake", "demo"), classify as "ai_generated".
+3. If metadata reveals AI generation software, classify as "ai_generated".
+4. If metadata reveals editing software or edit history, weigh heavily toward "forged".
+5. Only classify as "real" if ALL text on the receipt is coherent, correctly spelled, and makes sense for the claimed vendor.
 
 Respond in this exact JSON format and nothing else:
 {
@@ -45,6 +65,7 @@ Respond in this exact JSON format and nothing else:
   "confidence": <number between 0 and 1>,
   "reasoning": "<cite specific text, visual, and metadata evidence>"
 }`;
+}
 
 export async function checkAuthenticity(
   client: Anthropic,
@@ -55,7 +76,7 @@ export async function checkAuthenticity(
   const metadata = await analyzeMetadata(imageBuffer);
 
   const metadataContext = formatMetadataForPrompt(metadata);
-  const prompt = `${BASE_PROMPT}\n\n${metadataContext}`;
+  const prompt = `${buildPrompt()}\n\n${metadataContext}`;
 
   const response = await analyzeImage(client, imageBuffer, mimeType, prompt, model);
 
@@ -70,23 +91,27 @@ export async function checkAuthenticity(
   const positiveCount = metadata.flags.filter((f) => f.type === "positive").length;
 
   if (classification === "real" && positiveCount === 0) {
-    // No positive metadata signals — cap confidence and potentially reclassify
     if (!metadata.hasExif) {
-      // No EXIF at all: strong penalty
-      if (confidence > 0.5) {
-        confidence = 0.5;
-        reasoning += " [Adjusted: confidence capped due to missing EXIF metadata with no positive signals.]";
+      // No EXIF at all: moderate penalty
+      if (confidence > 0.6) {
+        confidence = 0.6;
+        reasoning += " [Adjusted: confidence capped due to completely missing EXIF metadata.]";
       }
-      // If Claude was barely confident, flip to ai_generated
-      if (parsed.confidence < 0.8) {
+      // Only reclassify if Claude itself was very unsure
+      if (parsed.confidence < 0.6) {
         classification = "ai_generated";
         confidence = 1 - confidence;
-        reasoning += " [Adjusted: reclassified as ai_generated — no EXIF metadata and insufficient visual confidence.]";
+        reasoning += " [Adjusted: reclassified as ai_generated — no EXIF metadata and low visual confidence.]";
       }
     } else if (suspiciousCount > 0) {
-      // Has EXIF but only suspicious flags (e.g., editing software, no camera info)
-      confidence = Math.min(confidence, 0.6);
-      reasoning += " [Adjusted: confidence reduced due to suspicious metadata with no positive signals.]";
+      // Has EXIF but suspicious flags like editing software or AI tools (not just missing camera info)
+      const hasSeriousFlag = metadata.flags.some(
+        (f) => f.type === "suspicious" && f.code !== "no_camera_info"
+      );
+      if (hasSeriousFlag) {
+        confidence = Math.min(confidence, 0.65);
+        reasoning += " [Adjusted: confidence reduced due to suspicious metadata flags.]";
+      }
     }
   }
 

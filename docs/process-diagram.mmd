@@ -1,0 +1,70 @@
+flowchart TD
+    A["extractReceipt(imageBuffer, options?)"] --> B
+
+    subgraph S1[Validation]
+        B[validateImage] --> B1{Buffer empty?}
+        B1 -->|Yes| ERR1["INVALID_IMAGE"]
+        B1 -->|No| B2{Size > 10MB?}
+        B2 -->|Yes| ERR2["INVALID_IMAGE"]
+        B2 -->|No| B3{Magic bytes match JPEG/PNG/WebP?}
+        B3 -->|No| ERR3["INVALID_IMAGE"]
+        B3 -->|Yes| C["mimeType detected"]
+    end
+
+    C --> D[createClient]
+    D --> D1{API key available?}
+    D1 -->|No| ERR4["MISSING_API_KEY"]
+    D1 -->|Yes| E[Anthropic client ready]
+
+    E --> F
+
+    subgraph S2[Authenticity Check]
+        F[analyzeMetadata] --> F1[Parse EXIF via exifr]
+        F1 --> F2{EXIF found?}
+        F2 -->|No| F3["Flag: no_exif"]
+        F2 -->|Yes| F4[Check metadata fields]
+        F4 --> F5{AI tool detected?}
+        F5 -->|Yes| F6["Flag: ai_software"]
+        F4 --> F7{Editing tool detected?}
+        F7 -->|Yes| F8["Flag: editing_software"]
+        F4 --> F9{XMP edit history?}
+        F9 -->|Yes| F10["Flag: edit_history"]
+        F4 --> F11{Camera make/model?}
+        F11 -->|Yes| F12["Flag: has_camera_info"]
+        F11 -->|No| F13["Flag: no_camera_info"]
+        F4 --> F14{GPS coords?}
+        F14 -->|Yes| F15["Flag: has_gps"]
+        F4 --> F16{DateTime?}
+        F16 -->|Yes| F17["Flag: has_datetime"]
+        F3 & F6 & F8 & F10 & F12 & F13 & F15 & F17 --> G[MetadataAnalysis]
+        G --> H[formatMetadataForPrompt]
+        H --> I["Claude API: forensic prompt + metadata"]
+        I --> J[extractJson]
+        J --> K[Local confidence adjustments]
+        K --> K1{real with no positive signals?}
+        K1 -->|No EXIF| K2["Cap at 0.5 / may reclassify"]
+        K1 -->|Suspicious only| K3["Cap at 0.6"]
+        K1 -->|No| K4[Keep as-is]
+        K2 & K3 & K4 --> L[AuthenticityResult]
+    end
+
+    L --> M{classification == real?}
+    M -->|No| OUT1["Return: authenticity, extraction: null"]
+    M -->|Yes| N
+
+    subgraph S3[Data Extraction]
+        N["Claude API: extraction prompt"] --> O[extractJson]
+        O --> P{isReceipt?}
+        P -->|No| OUT2["Return: authenticity, extraction: null"]
+        P -->|Yes| Q["ExtractionResult: vendor, items, total, currency"]
+    end
+
+    Q --> OUT3["Return: authenticity + extraction"]
+
+    style ERR1 fill:#c0392b,color:#fff
+    style ERR2 fill:#c0392b,color:#fff
+    style ERR3 fill:#c0392b,color:#fff
+    style ERR4 fill:#c0392b,color:#fff
+    style OUT1 fill:#2c3e50,color:#fff
+    style OUT2 fill:#2c3e50,color:#fff
+    style OUT3 fill:#27ae60,color:#fff

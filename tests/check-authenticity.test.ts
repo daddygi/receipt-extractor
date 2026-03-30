@@ -71,7 +71,7 @@ describe("checkAuthenticity", () => {
     const client = mockClient(
       JSON.stringify({
         classification: "real",
-        confidence: 0.75,
+        confidence: 0.5,
         reasoning: "Looks somewhat real.",
       })
     );
@@ -97,7 +97,7 @@ describe("checkAuthenticity", () => {
     const result = await checkAuthenticity(client, Buffer.from("fake"), "image/jpeg");
 
     expect(result.classification).toBe("real");
-    expect(result.confidence).toBe(0.5);
+    expect(result.confidence).toBe(0.6);
     expect(result.reasoning).toContain("confidence capped");
   });
 
@@ -115,7 +115,7 @@ describe("checkAuthenticity", () => {
     const result = await checkAuthenticity(client, Buffer.from("fake"), "image/jpeg");
 
     expect(result.classification).toBe("real");
-    expect(result.confidence).toBe(0.6);
+    expect(result.confidence).toBe(0.65);
     expect(result.reasoning).toContain("suspicious metadata");
   });
 
