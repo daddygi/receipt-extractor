@@ -25,11 +25,16 @@ AI image generators (DALL-E, Midjourney, Stable Diffusion, Flux) are notoriously
 
 CRITICAL: You MUST distinguish between these two very different things:
 
-A) POS SYSTEM CODES (LEGITIMATE — NOT fake): Real receipt printers use short product codes and abbreviations that may look cryptic but are intentional. Examples: "SCSTSE GRANDE" (Starbucks product code), "CHKN MCNGT" (Chicken McNuggets), "BRG W/CHS" (Burger with Cheese), "VEG WRAP SM" (Vegetable Wrap Small), "GRN TEA LRG" (Green Tea Large). These are short (usually under 10 characters per word), all-caps, and appear alongside recognizable words like sizes (GRANDE, TALL, SM, LRG) or categories. These are REAL and must NOT be flagged.
+A) POS SYSTEM CODES (LEGITIMATE — NOT fake): Real receipt printers use product codes, abbreviations, and truncated descriptions that look cryptic but are intentional. They come in many forms:
+- Short all-caps codes: "CHKN MCNGT" (Chicken McNuggets), "BRG W/CHS" (Burger with Cheese), "GRN TEA LRG" (Green Tea Large)
+- Consonant-heavy abbreviations with vowels removed: "CKNJOY" (Chicken Joy), "CHODRNK" (Chocolate Drink), "SMBNS" (brand code), "PRESSO" (Espresso), "MOKE" (Coke)
+- Truncated product descriptions: "Fettuccine Gummi Ital" (truncated Fettuccine Gummy Italian), "CROS HAM (V)" (Croissant Ham Variant), "JRDOUGH BAGE" (Sourdough Bagel), "OLDEN RCE" (Golden Rice)
+- Size/variant suffixes: "BRAZIL L (V)" (Brazil blend Large Variant), "SCSTSE GRANDE" (Starbucks Grande), "SFRIES" (Small Fries)
+These codes appear alongside prices, quantities, and standard receipt formatting. They are REAL and must NOT be flagged. POS systems worldwide use wildly different abbreviation schemes, so unfamiliar codes are not automatically suspicious.
 
 B) AI-GENERATED GARBLED TEXT (FAKE): AI image generators produce text that attempts to be full English words but contains wrong letters throughout. The words are typically LONGER than abbreviations and look like they're TRYING to spell something but fail. Examples: "Spiltgatay" (trying to be a food word but isn't), "Suoghotti" (trying to be "Spaghetti"), "Burdety Erreos" (trying to be "Burger"), "Ptash Pteaeno" (total nonsense), "Notang TannaMilattbg" (long garbled string), "Gerbottisoe Duchend" (gibberish). Notice how these are LONGER words that look like failed attempts at real English — not short intentional codes.
 
-The test: If an item name looks like it's trying to be a full English word but is misspelled with multiple wrong characters, that is AI generation. If it's a short, crisp code/abbreviation alongside recognizable words, that is a real POS system.
+The test: AI-generated text tries to form COMPLETE English words but gets multiple letters wrong (e.g. "Suoghotti" trying to be "Spaghetti" — same length, multiple wrong letters). POS codes are INTENTIONALLY shortened, truncated, or abbreviated — they don't attempt to spell the full word. If text looks like a deliberate abbreviation or truncation, it is likely a real POS code. Flag text that attempts full words but fails with multiple character errors. When MOST of the receipt text is coherent but a few codes look cryptic, those codes are likely POS abbreviations. When MOST of the text is garbled or nonsensical, the receipt is AI-generated.
 
 CRITICAL: Even if the IMAGE looks photorealistic with perfect paper texture, lighting, and thermal printer artifacts — if the TEXT contains garbled fake words (type B above), it is AI-generated. AI tools can generate realistic-looking images but CANNOT generate correct text consistently.
 
@@ -53,11 +58,19 @@ STEP 5: Based on ALL evidence, classify as:
 - "forged": real receipt photo that has been digitally edited/manipulated
 
 CLASSIFICATION RULES (in priority order):
-1. If item names, store names, or other text on the receipt contains garbled/nonsensical words that are NOT real words or standard abbreviations, classify as "ai_generated" IMMEDIATELY — regardless of how realistic the image looks. This is the strongest possible signal.
+1. If text on the receipt contains garbled/nonsensical words that are NOT real words, POS abbreviations, or OCR misreads, classify as "ai_generated". This is the strongest signal — but you MUST first rule out POS codes (Section A above) and OCR errors before applying this rule.
 2. If ANY other text red flags are found (like "generated", "sample", "test", "fake", "demo"), classify as "ai_generated".
 3. If metadata reveals AI generation software, classify as "ai_generated".
 4. If metadata reveals editing software or edit history, weigh heavily toward "forged".
-5. Only classify as "real" if ALL text on the receipt is coherent, correctly spelled, and makes sense for the claimed vendor.
+5. Classify as "real" if text on the receipt is coherent when accounting for POS abbreviations and minor OCR errors.
+
+IMPORTANT — these alone are NOT sufficient indicators of fake receipts:
+- A few POS abbreviations or truncated product codes among otherwise coherent text
+- OCR misreads (dropped leading characters, letter substitutions like D/O, merged words) — cross-reference OCR text with the image before drawing conclusions
+- Future dates, past dates, or expired permits/certifications — POS clocks can be misconfigured
+- Corporate/franchise entity names that differ from the brand name (e.g. "SHADHILA FOOD CENTER INC." operating as Jollibee is a normal franchise arrangement)
+
+However, if the MAJORITY of text on the receipt is garbled, misspelled, or nonsensical — even if some words are correct — classify as "ai_generated". AI generators often get some common words right (store names, "Total", "Thank you") while garbling product names and details.
 
 Respond in this exact JSON format and nothing else:
 {
@@ -71,14 +84,18 @@ export async function checkAuthenticity(
   client: Anthropic,
   imageBuffer: Buffer,
   mimeType: string,
-  model?: string
+  model?: string,
+  ocrText?: string | null
 ): Promise<AuthenticityResult> {
   const metadata = await analyzeMetadata(imageBuffer);
 
   const metadataContext = formatMetadataForPrompt(metadata);
-  const prompt = `${buildPrompt()}\n\n${metadataContext}`;
+  const ocrContext = ocrText
+    ? `\nOCR TEXT EXTRACTION (from a separate OCR model):\n---\n${ocrText}\n---\nUse this as a reference to help read text on the receipt. CAUTION: OCR models introduce their own errors — dropped leading characters, letter substitutions (e.g. 'D' misread as 'O'), and merged/split words. These are OCR artifacts, NOT evidence of AI generation. Always cross-reference against the image itself before concluding text is garbled.`
+    : "";
+  const prompt = `${buildPrompt()}\n\n${metadataContext}${ocrContext}`;
 
-  const response = await analyzeImage(client, imageBuffer, mimeType, prompt, model);
+  const { text: response, usage } = await analyzeImage(client, imageBuffer, mimeType, prompt, model);
 
   const parsed = extractJson(response) as any;
 
@@ -120,5 +137,6 @@ export async function checkAuthenticity(
     confidence,
     reasoning,
     metadata,
+    usage,
   };
 }

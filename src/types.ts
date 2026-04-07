@@ -1,3 +1,8 @@
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export type AuthenticityClassification = "real" | "ai_generated" | "forged";
 
 export interface MetadataFlag {
@@ -21,6 +26,7 @@ export interface AuthenticityResult {
   confidence: number;
   reasoning: string;
   metadata: MetadataAnalysis;
+  usage: TokenUsage;
 }
 
 export interface ReceiptItem {
@@ -36,15 +42,19 @@ export interface ExtractionResult {
   currency: string;
   receiptNumber: string | null;
   purchaseDate: string | null;
+  usage: TokenUsage;
 }
 
 export interface ReceiptResult {
   authenticity: AuthenticityResult;
   extraction: ExtractionResult | null;
+  usage: TokenUsage;
 }
 
 export interface ExtractorOptions {
   apiKey?: string;
   authenticityModel?: string;
   extractionModel?: string;
+  ollamaUrl?: string;
+  ocrModel?: string;
 }

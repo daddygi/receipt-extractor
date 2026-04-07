@@ -34,9 +34,13 @@ export async function extractReceiptData(
   client: Anthropic,
   imageBuffer: Buffer,
   mimeType: string,
-  model?: string
+  model?: string,
+  ocrText?: string | null
 ): Promise<ExtractionResult> {
-  const response = await analyzeImage(client, imageBuffer, mimeType, PROMPT, model);
+  const ocrContext = ocrText
+    ? `\n\nOCR TEXT (extracted by a separate OCR model — use this as the primary source for text data):\n---\n${ocrText}\n---\nUse this OCR text to accurately extract item names, prices, totals, and other details. The OCR text is more reliable than trying to read the image directly.`
+    : "";
+  const { text: response, usage } = await analyzeImage(client, imageBuffer, mimeType, PROMPT + ocrContext, model);
 
   const parsed = extractJson(response) as any;
 
@@ -48,5 +52,6 @@ export async function extractReceiptData(
     currency: parsed.currency,
     receiptNumber: parsed.receiptNumber ?? null,
     purchaseDate: parsed.purchaseDate ?? null,
+    usage,
   };
 }
